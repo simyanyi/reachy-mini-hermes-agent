@@ -1,0 +1,14 @@
+name: reachy-mini
+version: "0.1.0"
+description: "Reachy Mini robot control tools for Hermes Agent"
+author: ""
+provides_tools:
+  - reachy_connect
+  - reachy_disconnect
+  - reachy_move_head
+  - reachy_move_antennas
+  - reachy_play_emotion
+  - reachy_dance
+  - reachy_capture_image
+  - reachy_say
+  - reachy_status
