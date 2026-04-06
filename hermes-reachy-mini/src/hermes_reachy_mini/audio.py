@@ -104,8 +104,12 @@ class AudioCapture:
                     chunk = await asyncio.to_thread(
                         self.reachy.media.get_audio_sample
                     )
-                else:
+                elif self._use_local_mic:
                     chunk = await self._read_local_mic(1024)
+                else:
+                    raise RuntimeError(
+                        "Reachy Mini mic not available — robot media backend not connected"
+                    )
 
                 if chunk is None:
                     await asyncio.sleep(0.01)

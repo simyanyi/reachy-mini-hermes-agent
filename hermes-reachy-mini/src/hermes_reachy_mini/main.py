@@ -73,6 +73,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Reachy Mini connection mode (default: network)",
     )
+    parser.add_argument(
+        "--media-backend",
+        choices=["default", "no_media", "gstreamer"],
+        default=None,
+        help="Reachy Mini media backend (default: auto-detect)",
+    )
 
     # STT options
     parser.add_argument(
@@ -134,6 +140,8 @@ def create_config(args: argparse.Namespace) -> Config:
 
     if args.reachy_mode:
         config.reachy_connection_mode = args.reachy_mode
+    if args.media_backend:
+        config.reachy_media_backend = args.media_backend
     config.audio_device = args.audio_device
     config.stt_backend = args.stt
     config.whisper_model = args.whisper_model

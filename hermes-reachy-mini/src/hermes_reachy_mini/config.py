@@ -16,6 +16,7 @@ class Config:
     # Reachy Mini connection
     reachy_connection_mode: str = "network"  # "auto", "localhost_only", "network"
     reachy_media_backend: str = "default"  # "no_media", "default", or "gstreamer"
+    reachy_dashboard_url: str = "http://192.168.0.151:8000"
 
     # Speech-to-text
     stt_backend: str = "whisper"  # "whisper", "faster-whisper", "openai"
@@ -60,4 +61,6 @@ def load_config() -> Config:
         stt_backend=os.environ.get("STT_BACKEND", "whisper"),
         whisper_model=os.environ.get("WHISPER_MODEL", "base"),
         wake_word=os.environ.get("WAKE_WORD"),
+        reachy_dashboard_url=os.environ.get("REACHY_DASHBOARD_URL", "http://192.168.0.151:8000"),
+        reachy_media_backend=os.environ.get("REACHY_MEDIA_BACKEND", "default"),
     )

@@ -9,6 +9,7 @@ import random
 import subprocess
 import sys
 import tempfile
+import time
 from enum import Enum, auto
 
 import numpy as np
@@ -291,27 +292,76 @@ class ReachyInterface:
         self.state = InterfaceState.IDLE
         logger.info("Ready for next turn")
 
+    def _ensure_reachy_daemon(self) -> None:
+        """Check dashboard reachability and start the daemon if not running."""
+        import httpx
+
+        base_url = self.config.reachy_dashboard_url
+
+        try:
+            resp = httpx.get(f"{base_url}/api/daemon/status", timeout=3.0)
+            resp.raise_for_status()
+        except Exception as e:
+            raise ConnectionError(f"Reachy dashboard not reachable at {base_url}: {e}")
+
+        state = resp.json().get("state", "unknown")
+        if state == "running":
+            logger.debug("Reachy daemon already running")
+            return
+
+        logger.info(f"Reachy daemon state: {state!r} — starting daemon...")
+        try:
+            httpx.post(f"{base_url}/api/daemon/start?wake_up=true", timeout=5.0)
+        except Exception as e:
+            raise ConnectionError(f"Failed to start Reachy daemon: {e}")
+
+        for _ in range(30):
+            time.sleep(2.0)
+            try:
+                resp = httpx.get(f"{base_url}/api/daemon/status", timeout=3.0)
+                if resp.json().get("state") == "running":
+                    logger.info("Reachy daemon is running")
+                    return
+            except Exception:
+                pass
+
+        raise TimeoutError("Reachy daemon did not reach running state within 60s")
+
     def connect_reachy(self) -> None:
-        """Connect to Reachy Mini robot. Must be called before the async loop."""
+        """Connect to Reachy Mini robot, retrying with exponential backoff."""
         try:
             from reachy_mini import ReachyMini
-
-            kwargs = {}
-            if self.config.reachy_connection_mode != "auto":
-                kwargs["connection_mode"] = self.config.reachy_connection_mode
-            if self.config.reachy_media_backend != "default":
-                kwargs["media_backend"] = self.config.reachy_media_backend
-
-            self._reachy = ReachyMini(**kwargs)
-            self._reachy.__enter__()
-            logger.info("Connected to Reachy Mini")
-
         except ImportError:
             logger.warning("reachy-mini not installed, running in simulation mode")
             self._reachy = None
-        except Exception as e:
-            logger.error(f"Failed to connect to Reachy Mini: {e}")
-            self._reachy = None
+            return
+
+        delay = 2.0
+        max_delay = 60.0
+        attempt = 0
+
+        while True:
+            attempt += 1
+            try:
+                self._ensure_reachy_daemon()
+
+                kwargs = {}
+                if self.config.reachy_connection_mode != "auto":
+                    kwargs["connection_mode"] = self.config.reachy_connection_mode
+                if self.config.reachy_media_backend != "default":
+                    kwargs["media_backend"] = self.config.reachy_media_backend
+
+                self._reachy = ReachyMini(**kwargs)
+                self._reachy.__enter__()
+                logger.info("Connected to Reachy Mini")
+                return
+            except Exception as e:
+                logger.warning(
+                    f"Failed to connect to Reachy Mini (attempt {attempt}): {e}"
+                )
+                logger.info(f"Retrying in {delay:.0f}s...")
+                time.sleep(delay)
+                delay = min(delay * 2, max_delay)
 
     def _share_reachy_with_plugin(self) -> None:
         """Share the Reachy connection with the hermes plugin bridge."""
