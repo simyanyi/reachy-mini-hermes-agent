@@ -420,11 +420,12 @@ class ReachyInterface:
                 speed=1.0,
             )
 
-            if len(audio_result) == 0 or audio_result[0].numel() == 0:
+            # OmniVoice returns a list of numpy arrays: [audio_np, ...]
+            if not audio_result or audio_result[0].size == 0:
                 logger.warning("OmniVoice produced no audio output")
                 return
 
-            audio_np = audio_result[0].cpu().numpy()
+            audio_np = audio_result[0]
 
             # OmniVoice outputs at 24kHz; Reachy expects 16kHz mono 16-bit
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as wf:
