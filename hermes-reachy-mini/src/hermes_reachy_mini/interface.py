@@ -16,10 +16,6 @@ import numpy as np
 
 from hermes_reachy_mini.audio import AudioCapture, WakeWordDetector
 from hermes_reachy_mini.config import Config
-from hermes_reachy_mini.elevenlabs import (
-    elevenlabs_tts_to_temp_audio_file,
-    load_elevenlabs_config,
-)
 from hermes_reachy_mini.stt import STTBackend, create_stt_backend
 
 logger = logging.getLogger(__name__)
@@ -58,6 +54,9 @@ class ReachyInterface:
         self._stt: STTBackend | None = None
         self._audio: AudioCapture | None = None
         self._wake_detector: WakeWordDetector | None = None
+
+        # TTS cache
+        self._tts_model = None
 
         # State
         self._running = False
@@ -376,20 +375,69 @@ class ReachyInterface:
         except ImportError as e:
             logger.debug(f"Plugin bridge not available for connection sharing: {e}")
 
+    def _load_omnivoice_model(self):
+        """Load OmniVoice model (called from thread)."""
+        import torch
+        from omnivoice import OmniVoice
+
+        # Use CPU if no GPU available, otherwise use auto
+        device_map = "cpu"
+        try:
+            if torch.cuda.is_available():
+                device_map = "cuda:0"
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                device_map = "mps"
+        except Exception:
+            pass
+
+        logger.info(f"Loading OmniVoice model on {device_map}...")
+        model = OmniVoice.from_pretrained(
+            "k2-fsa/OmniVoice",
+            device_map=device_map,
+            dtype=torch.float16,
+        )
+        logger.info("OmniVoice model loaded successfully")
+        return model
+
     async def _speak(self, text: str) -> None:
-        """Speak text through Reachy Mini using Piper TTS."""
+        """Speak text through Reachy Mini using OmniVoice TTS."""
         clean_text = text.replace("**", "").replace("*", "").replace("`", "")
         temp_wav_path: str | None = None
+        resampled_path: str | None = None
 
         try:
-            logger.info("Generating speech with Piper TTS...")
+            logger.info("Generating speech with OmniVoice...")
+
+            # Load model lazily on first call
+            if self._tts_model is None:
+                self._tts_model = await asyncio.to_thread(self._load_omnivoice_model)
+
+            # Generate audio synchronously (audio is returned as numpy)
+            audio_result = await asyncio.to_thread(
+                self._tts_model.generate,
+                text=clean_text,
+                num_step=16,  # 16 steps for speed; 32 is default quality
+                speed=1.0,
+            )
+
+            if len(audio_result) == 0 or audio_result[0].numel() == 0:
+                logger.warning("OmniVoice produced no audio output")
+                return
+
+            audio_np = audio_result[0].cpu().numpy()
+
+            # OmniVoice outputs at 24kHz; Reachy expects 16kHz mono 16-bit
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as wf:
                 temp_wav_path = wf.name
 
-            # Piper outputs 16kHz 16-bit mono WAV by default, matching Reachy's requirements exactly.
+            import soundfile as sf
+
+            sf.write(temp_wav_path, audio_np, 24000)
+
+            # Resample to 16kHz using soxr (already installed as dependency)
+            resampled_path = temp_wav_path + ".16k.wav"
             subprocess.run(
-                ["piper", "-m", "en_US-amy-medium", "-f", temp_wav_path],
-                input=clean_text.encode("utf-8"),
+                ["soxr", "-r", "16000", temp_wav_path, resampled_path],
                 capture_output=True,
                 check=True,
             )
@@ -397,8 +445,11 @@ class ReachyInterface:
             try:
                 if self._reachy and self.config.reachy_media_backend != "no_media":
                     import wave
-                    with wave.open(temp_wav_path, "rb") as wf:
-                        audio_data = np.frombuffer(wf.readframes(wf.getnframes()), dtype=np.int16)
+
+                    with wave.open(resampled_path, "rb") as wf:
+                        audio_data = np.frombuffer(
+                            wf.readframes(wf.getnframes()), dtype=np.int16
+                        )
                         audio_float = audio_data.astype(np.float32) / 32768.0
 
                     self._reachy.media.start_playing()
@@ -414,7 +465,7 @@ class ReachyInterface:
                     logger.info(f"Speaking with {total_chunks} chunks...")
 
                     for i in range(0, len(audio_float), chunk_size):
-                        chunk = audio_float[i:i + chunk_size]
+                        chunk = audio_float[i : i + chunk_size]
                         self._reachy.media.push_audio_sample(chunk)
                         await asyncio.sleep(chunk_duration * 0.9)
 
@@ -428,23 +479,36 @@ class ReachyInterface:
                     await asyncio.sleep(0.5)
                     self._reachy.media.stop_playing()
                 else:
-                    # Fallback: play locally
-                    subprocess.run(["aplay", temp_wav_path], capture_output=True)
+                    # Fallback: play locally (resampled version)
+                    subprocess.run(
+                        ["aplay", "-r", "16000", resampled_path], capture_output=True
+                    )
             except Exception as e:
                 logger.error(f"Reachy TTS playback failed: {e}")
-                subprocess.run(["aplay", temp_wav_path], capture_output=True)
+                subprocess.run(
+                    ["aplay", "-r", "16000", resampled_path], capture_output=True
+                )
 
         except subprocess.CalledProcessError as e:
-            logger.error(f"Piper TTS generation failed: {e}")
+            logger.error(f"TTS processing failed: {e}")
             logger.error(e.stderr.decode("utf-8") if e.stderr else "Unknown error")
             logger.info(f"[TTS] {text}")
         except Exception as e:
-            logger.error(f"TTS failed: {e}")
+            logger.error(f"OmniVoice TTS failed: {e}")
+            import traceback
+
+            traceback.print_exc()
             logger.info(f"[TTS] {text}")
         finally:
-            if temp_wav_path:
+            for path in (temp_wav_path,):
+                if path:
+                    try:
+                        os.unlink(path)
+                    except FileNotFoundError:
+                        pass
+            if resampled_path and os.path.exists(resampled_path):
                 try:
-                    os.unlink(temp_wav_path)
+                    os.unlink(resampled_path)
                 except FileNotFoundError:
                     pass
 
