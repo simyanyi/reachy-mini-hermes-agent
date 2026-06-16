@@ -16,7 +16,7 @@ class Config:
     # Reachy Mini connection
     reachy_connection_mode: str = "network"  # "auto", "localhost_only", "network"
     reachy_media_backend: str = "default"  # "no_media", "default", or "gstreamer"
-    reachy_dashboard_url: str = "http://localhost:8001"
+    reachy_dashboard_url: str = "http://192.168.50.116:8001"
 
     # Speech-to-text
     stt_backend: str = "whisper"  # "whisper", "faster-whisper", "openai"
@@ -34,7 +34,7 @@ class Config:
     max_recording_duration: float = 30.0
 
     # Behavior
-    wake_word: str | None = None
+    wake_word: str | None = "hey reachy"
     play_emotions: bool = True
     idle_animations: bool = True
     standalone_mode: bool = False  # Run without AI (echo mode for testing)
@@ -60,7 +60,7 @@ def load_config() -> Config:
         model=os.environ.get("HERMES_MODEL", "anthropic/claude-opus-4.6"),
         stt_backend=os.environ.get("STT_BACKEND", "whisper"),
         whisper_model=os.environ.get("WHISPER_MODEL", "base"),
-        wake_word=os.environ.get("WAKE_WORD"),
-        reachy_dashboard_url=os.environ.get("REACHY_DASHBOARD_URL", "http://localhost:8001"),
+        wake_word=os.environ.get("WAKE_WORD", "hey reachy"),
+        reachy_dashboard_url=os.environ.get("REACHY_DASHBOARD_URL", "http://192.168.50.116:8001"),
         reachy_media_backend=os.environ.get("REACHY_MEDIA_BACKEND", "default"),
     )
