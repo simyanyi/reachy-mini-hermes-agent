@@ -12,7 +12,7 @@ import httpx
 
 
 ELEVENLABS_API_BASE_URL = "https://api.elevenlabs.io/v1"
-DEFAULT_ELEVENLABS_VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"  # George
+DEFAULT_ELEVENLABS_VOICE_ID = "tnSpp4vdxKPjI9w0GnoV"  
 
 
 @dataclass(frozen=True)

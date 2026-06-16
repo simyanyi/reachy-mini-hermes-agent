@@ -14,9 +14,9 @@ class Config:
     model: str = "anthropic/claude-opus-4.6"
 
     # Reachy Mini connection
-    reachy_connection_mode: str = "network"  # "auto", "localhost_only", "network"
+    reachy_connection_mode: str = "auto"  # "auto", "localhost_only", "network"
     reachy_media_backend: str = "default"  # "no_media", "default", or "gstreamer"
-    reachy_dashboard_url: str = "http://192.168.50.116:8000"
+    reachy_dashboard_url: str = "http://localhost:8000"
 
     # Speech-to-text
     stt_backend: str = "whisper"  # "whisper", "faster-whisper", "openai"
@@ -61,6 +61,6 @@ def load_config() -> Config:
         stt_backend=os.environ.get("STT_BACKEND", "whisper"),
         whisper_model=os.environ.get("WHISPER_MODEL", "base"),
         wake_word=os.environ.get("WAKE_WORD", "hey reachy"),
-        reachy_dashboard_url=os.environ.get("REACHY_DASHBOARD_URL", "http://192.168.50.116:8000"),
+        reachy_dashboard_url=os.environ.get("REACHY_DASHBOARD_URL", "http://localhost:8000"),
         reachy_media_backend=os.environ.get("REACHY_MEDIA_BACKEND", "default"),
     )
