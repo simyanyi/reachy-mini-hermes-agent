@@ -10,7 +10,7 @@ class ReachyConfig:
 
     connection_mode: str = "network"  # "auto", "localhost_only", "network"
     media_backend: str = "default"  # "no_media", "default", or "gstreamer"
-    dashboard_url: str = "http://192.168.0.151:8000"  # Reachy Mini dashboard for REST API
+    dashboard_url: str = "http://localhost:8000"  # Reachy Mini dashboard for REST API
     emotions_dataset: str = "pollen-robotics/reachy-mini-emotions-library"
     dances_dataset: str = "pollen-robotics/reachy-mini-dances-library"
     capture_dir: Path = field(default_factory=lambda: Path.home() / ".hermes" / "reachy-captures")

@@ -377,37 +377,25 @@ class ReachyInterface:
             logger.debug(f"Plugin bridge not available for connection sharing: {e}")
 
     async def _speak(self, text: str) -> None:
-        """Speak text through Reachy Mini using ElevenLabs TTS."""
+        """Speak text through Reachy Mini using Piper TTS."""
         clean_text = text.replace("**", "").replace("*", "").replace("`", "")
-        temp_audio_path: str | None = None
         temp_wav_path: str | None = None
 
         try:
-            tts_cfg = load_elevenlabs_config()
-            logger.info("Generating speech with ElevenLabs...")
-            temp_audio_path = await elevenlabs_tts_to_temp_audio_file(
-                text=clean_text,
-                config=tts_cfg,
-                voice_settings={"use_speaker_boost": True},
+            logger.info("Generating speech with Piper TTS...")
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as wf:
+                temp_wav_path = wf.name
+
+            # Piper outputs 16kHz 16-bit mono WAV by default, matching Reachy's requirements exactly.
+            subprocess.run(
+                ["piper", "-m", "en_US-amy-medium", "-f", temp_wav_path],
+                input=clean_text.encode("utf-8"),
+                capture_output=True,
+                check=True,
             )
 
-            if self._reachy and self.config.reachy_media_backend != "no_media":
-                try:
-                    # Convert to 16k mono wav for Reachy playback
-                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as wf:
-                        temp_wav_path = wf.name
-                    subprocess.run(
-                        [
-                            "ffmpeg", "-y",
-                            "-i", temp_audio_path,
-                            "-ar", "16000",
-                            "-ac", "1",
-                            temp_wav_path,
-                        ],
-                        capture_output=True,
-                        check=True,
-                    )
-
+            try:
+                if self._reachy and self.config.reachy_media_backend != "no_media":
                     import wave
                     with wave.open(temp_wav_path, "rb") as wf:
                         audio_data = np.frombuffer(wf.readframes(wf.getnframes()), dtype=np.int16)
@@ -439,28 +427,26 @@ class ReachyInterface:
                     self._reachy.set_target_antenna_joint_positions([0.0, 0.0])
                     await asyncio.sleep(0.5)
                     self._reachy.media.stop_playing()
-                except Exception as e:
-                    logger.error(f"Reachy TTS playback failed: {e}")
-                    subprocess.run(["aplay", temp_audio_path], capture_output=True)
-            else:
-                # Fallback: play locally
-                subprocess.run(["aplay", temp_audio_path], capture_output=True)
-        except ValueError as e:
-            logger.error(f"ElevenLabs TTS configuration error: {e}")
-            logger.info(
-                "Set REACHY_ELEVENLABS_API_KEY or ELEVENLABS_API_KEY to enable speech."
-            )
+                else:
+                    # Fallback: play locally
+                    subprocess.run(["aplay", temp_wav_path], capture_output=True)
+            except Exception as e:
+                logger.error(f"Reachy TTS playback failed: {e}")
+                subprocess.run(["aplay", temp_wav_path], capture_output=True)
+
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Piper TTS generation failed: {e}")
+            logger.error(e.stderr.decode("utf-8") if e.stderr else "Unknown error")
             logger.info(f"[TTS] {text}")
         except Exception as e:
             logger.error(f"TTS failed: {e}")
             logger.info(f"[TTS] {text}")
         finally:
-            for path in (temp_wav_path, temp_audio_path):
-                if path:
-                    try:
-                        os.unlink(path)
-                    except FileNotFoundError:
-                        pass
+            if temp_wav_path:
+                try:
+                    os.unlink(temp_wav_path)
+                except FileNotFoundError:
+                    pass
 
     async def _play_emotion(self, emotion: str) -> None:
         """Play emotion animation on Reachy Mini."""
