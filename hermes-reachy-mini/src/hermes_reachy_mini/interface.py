@@ -412,10 +412,18 @@ class ReachyInterface:
             if self._tts_model is None:
                 self._tts_model = await asyncio.to_thread(self._load_omnivoice_model)
 
-            # Generate audio synchronously (audio is returned as numpy)
+            # Generate audio synchronously using fixed reference voice
+            ref_audio_path = os.path.join(
+                os.path.dirname(__file__),
+                "../../",  # go up from .../hermes_reachy_mini/ to hermes-reachy-mini/
+                "ref_voice.wav",
+            )
+
             audio_result = await asyncio.to_thread(
                 self._tts_model.generate,
                 text=clean_text,
+                ref_audio=ref_audio_path,
+                ref_text="Hello, I am Jerry. Nice to meet you. I'll be talking to you soon.",
                 num_step=16,  # 16 steps for speed; 32 is default quality
                 speed=1.0,
             )
@@ -435,10 +443,16 @@ class ReachyInterface:
 
             sf.write(temp_wav_path, audio_np, 24000)
 
-            # Resample to 16kHz using soxr (already installed as dependency)
+            # Resample to 16kHz using ffmpeg (already widely available)
             resampled_path = temp_wav_path + ".16k.wav"
             subprocess.run(
-                ["soxr", "-r", "16000", temp_wav_path, resampled_path],
+                [
+                    "ffmpeg", "-y",
+                    "-i", temp_wav_path,
+                    "-ar", "16000",
+                    "-ac", "1",
+                    resampled_path,
+                ],
                 capture_output=True,
                 check=True,
             )
