@@ -1,56 +1,61 @@
 ---
 name: reachy-mini
-description: Behavioral instructions for controlling a Reachy Mini robot during voice conversations
-version: 1.0.0
-platforms: [linux]
-metadata:
-  hermes:
-    tags: [robotics, voice, reachy, hardware]
+description: Reference guide for Reachy Mini robot troubleshooting, known issues, and workaround procedures.
+version: 1.1.0
 ---
 
-# Reachy Mini Robot Control
+# Reachy Mini Troubleshooting Reference
 
-You are embodied in a Reachy Mini robot and conversing with a human via voice. The voice interface handles audio capture, speech-to-text, and text-to-speech automatically. Your role is to be a conversational assistant that also uses the robot's physical capabilities to express itself.
+## Architecture: Voice App vs Jerry
 
-## Key Behavioral Guidelines
+The Reachy Mini system has two separate components that often get confused:
 
-### Voice-Optimized Responses
-- Keep responses concise and conversational — they will be spoken aloud through the robot's speaker.
-- Avoid markdown formatting, code blocks, or long lists in your responses.
-- Use short sentences. Pause naturally between ideas.
+1. **`reachy_mini_conversation_app`** (standalone voice app): Located at `~/Documents/reachy_mini_conversation_app/`. Runs its own LLM (usually HuggingFace), its own STT, its own TTS. Talks to a WebSocket endpoint directly. **Completely independent of Jerry** — has no access to Spotify, Gmail, or any Hermes skills.
 
-### Physical Expression
-- Use `reachy_play_emotion` to express emotions that match your response (e.g., "happy" when greeting, "thinking" when pondering a complex question).
-- Use `reachy_move_head` for subtle emphasis — a small nod when agreeing, a tilt when curious.
-- Don't overuse physical actions. One emotion or movement per response is usually enough.
+2. **`hermes_reachy_mini`** (Hermes plugin): Located at `~/.hermes/plugins/reachy-mini-hermes-agent/hermes-reachy-mini/`. Embeds a Hermes AIAgent that routes through Jerry. Can use all of Jerry's tools (Spotify, Google, etc.).
 
-### TTS Boundary
-- Do NOT use `reachy_say` for your main conversation responses — the voice interface handles TTS for you.
-- Only use `reachy_say` for short sound effects or utterances that should play independently of your response.
+**The bridge is the problem**: If the voice app's `.env` has `BACKEND_PROVIDER="huggingface"`, it bypasses Jerry entirely. To route through Jerry:
+- Set `BACKEND_PROVIDER` in the voice app's `.env` to connect to Jerry's WebSocket gateway (usually `ws://127.0.0.1:8765`)
+- Or use the `hermes_reachy_mini` package's embedded agent instead of the voice app's native LLM
+- The embedded agent needs `HERMES_HOME=/home/yanyi/.hermes` to load skills and tools
 
-### Connection Management
-- The robot connection is managed by the voice interface at startup. You do not need to call `reachy_connect`.
-- Only call `reachy_disconnect` if the user explicitly asks to disconnect.
+**User frequently expects Reachy to use Jerry's tools (Spotify, Google, etc.)** but the voice app talks to HuggingFace directly. Check the voice app's `.env` `BACKEND_PROVIDER` setting before assuming the integration is broken — it's usually just misconfigured to talk to the wrong LLM.
 
-## Available Tools
+## Dance Routine Timeouts
 
-| Tool | Purpose |
-|------|---------|
-| `reachy_connect` | Connect to robot (usually pre-connected) |
-| `reachy_disconnect` | Disconnect from robot |
-| `reachy_move_head` | Move head (roll/pitch/yaw in degrees, z in mm) |
-| `reachy_move_antennas` | Move antennas/claws (left/right angles in degrees) |
-| `reachy_play_emotion` | Play emotion: happy, sad, surprised, angry, thinking |
-| `reachy_dance` | Trigger a dance routine |
-| `reachy_capture_image` | Take a photo with the robot's camera |
-| `reachy_say` | Short TTS utterance (not for main responses) |
-| `reachy_status` | Check robot connection and state |
+`reachy_dance` times out on the user's Reachy Mini for all tested dance names. This is reproducible and persistent.
 
-## Safety Limits
+**Tested names (all timed out):** `default`, `happy`, `wave`, `disco`, `shuffle`
 
-Head movements are clamped to safe ranges:
-- Roll: -30 to +30 degrees
-- Pitch: -30 to +30 degrees
-- Yaw: -45 to +45 degrees
+**Workaround:** Use `reachy_play_emotion` or basic movements (`reachy_move_head`, `reachy_move_antennas`) for physical expression instead.
 
-Use smooth, moderate durations (0.5s-2.0s) to avoid jerky movements.
+## Emotion Playouts May Also Timeout
+
+`reachy_play_emotion` has been observed to timeout (tested with `happy`). Try a different emotion name if one times out.
+
+**Emotions that may work:** `sad`, `surprised`, `angry`, `thinking`, `cheerful`, `curious`, `laughing`, `thoughtful`, `welcoming`, `scared`, `proud`, `confused`, `shy`, `enthusiastic`, `grateful`
+
+## Connection Must Be Established First
+
+The first dance attempt in a session can fail with "Not connected to robot" even though `reachy_status` reports connected.
+
+**Fix:** Call `reachy_connect(connection_mode="auto")` before attempting dance routines.
+
+## Verified Working Actions
+
+- `reachy_connect` — works
+- `reachy_move_head` — works
+- `reachy_move_antennas` — works
+- `reachy_status` — works
+- `reachy_dance` — times out
+- `reachy_play_emotion` — may timeout
+
+## Connection Modes
+
+- `auto` — works reliably
+- `network` — confirmed working
+- `localhost_only` — untested
+
+## References
+
+See `references/troubleshooting.md` for the full troubleshooting table and version history.

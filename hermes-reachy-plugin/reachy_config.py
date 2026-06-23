@@ -9,7 +9,7 @@ class ReachyConfig:
     """Configuration for connecting to Reachy Mini."""
 
     connection_mode: str = "network"  # "auto", "localhost_only", "network"
-    media_backend: str = "default"  # "no_media", "default", or "gstreamer"
+    media_backend: str = "local"  # "local", "no_media", "default", or "gstreamer"
     dashboard_url: str = "http://localhost:8000"  # Reachy Mini dashboard for REST API
     emotions_dataset: str = "pollen-robotics/reachy-mini-emotions-library"
     dances_dataset: str = "pollen-robotics/reachy-mini-dances-library"

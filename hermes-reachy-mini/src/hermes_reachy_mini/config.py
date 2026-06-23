@@ -15,7 +15,7 @@ class Config:
 
     # Reachy Mini connection
     reachy_connection_mode: str = "auto"  # "auto", "localhost_only", "network"
-    reachy_media_backend: str = "default"  # "no_media", "default", or "gstreamer"
+    reachy_media_backend: str = "local"  # "local", "no_media", "default", or "gstreamer"
     reachy_dashboard_url: str = "http://localhost:8000"
 
     # Speech-to-text

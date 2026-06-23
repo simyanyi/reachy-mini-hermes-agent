@@ -413,7 +413,7 @@ class ReachyInterface:
                 self._tts_model = await asyncio.to_thread(self._load_omnivoice_model)
 
             # Generate audio synchronously using fixed reference voice
-            ref_audio_path = "~/Documents/reachy-mini-hermes-agent/ref_voice.wav"
+            ref_audio_path = "/home/yanyi/Documents/reachy-mini-hermes-agent/ref_voice.wav"
 
             audio_result = await asyncio.to_thread(
                 self._tts_model.generate,
